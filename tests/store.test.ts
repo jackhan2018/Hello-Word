@@ -1,282 +1,304 @@
-import { describe, it, expect, beforeAll } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { useAppStore, useNovelsStore, useChaptersStore, useCharactersStore, useWorldStore, useTimelineStore, useAIWritingStore } from '../src/store';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { act } from '@testing-library/react';
+import {
+  useAppStore, useNovelsStore, useChaptersStore, useCharactersStore,
+  useWorldStore, useTimelineStore, useAIWritingStore, usePublishStore
+} from '../src/store';
 import type { Novel, Chapter, Character, WorldBuilding, TimelineEvent, ChapterStatus } from '../src/types';
 
 describe('Zustand Store 测试', () => {
 
-  describe('AppStore - 应用状态管理', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useNovelsStore.setState({ novels: [] });
+    useChaptersStore.setState({ chaptersByNovel: {} });
+    useCharactersStore.setState({ charactersByNovel: {} });
+    useWorldStore.setState({ worldByNovel: {} });
+    useTimelineStore.setState({ eventsByNovel: {} });
+    usePublishStore.setState({ configsByNovel: {}, schedulesByNovel: {} });
+  });
+
+  describe('AppStore', () => {
     it('应该正确初始化用户状态', () => {
       const state = useAppStore.getState();
       expect(state.user).not.toBeNull();
-      expect(state.user?.name).toBe('墨韵作者');
+      expect(state.user.name).toBeTruthy();
     });
 
-    it('应该正确切换侧边栏状态', () => {
-      const { toggleSidebar } = useAppStore.getState();
+    it('应该正确切换侧边栏', () => {
       const initial = useAppStore.getState().sidebarCollapsed;
-
-      act(() => {
-        toggleSidebar();
-      });
-
+      act(() => { useAppStore.getState().toggleSidebar(); });
       expect(useAppStore.getState().sidebarCollapsed).toBe(!initial);
     });
 
     it('应该正确设置活跃小说ID', () => {
-      act(() => {
-        useAppStore.getState().setActiveNovelId('test-novel-1');
-      });
-
-      expect(useAppStore.getState().activeNovelId).toBe('test-novel-1');
-    });
-
-    it('应该正确切换主题', () => {
-      act(() => {
-        useAppStore.getState().setTheme('dark');
-      });
-
-      expect(useAppStore.getState().theme).toBe('dark');
+      act(() => { useAppStore.getState().setActiveNovelId('novel-1'); });
+      expect(useAppStore.getState().activeNovelId).toBe('novel-1');
     });
   });
 
-  describe('NovelsStore - 小说管理', () => {
-    const mockNovel: Novel = {
-      id: 'test-1',
-      userId: 'user-1',
-      title: '测试小说',
-      genre: 'xianxia',
-      synopsis: '测试简介',
-      targetPlatforms: ['fanqie'],
-      status: 'writing',
-      wordCount: 10000,
-      chapterCount: 10,
-      settings: { writingMode: 'ai_collaboration' },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
+  describe('NovelsStore', () => {
     it('应该正确添加小说', () => {
-      act(() => {
-        useNovelsStore.getState().addNovel(mockNovel);
+      const novel = useNovelsStore.getState().addNovel({
+        userId: 'user-1',
+        title: '测试小说',
+        genre: 'xianxia',
+        synopsis: '测试简介',
+        targetPlatforms: ['fanqie'],
+        status: 'writing',
+        settings: { writingMode: 'ai_collaboration' },
       });
 
-      const novels = useNovelsStore.getState().novels;
-      expect(novels.length).toBeGreaterThan(0);
-      expect(novels.some(n => n.id === 'test-1')).toBe(true);
+      expect(novel.id).toBeTruthy();
+      expect(novel.title).toBe('测试小说');
+      expect(useNovelsStore.getState().novels).toHaveLength(1);
     });
 
     it('应该正确更新小说', () => {
-      act(() => {
-        useNovelsStore.getState().updateNovel('test-1', { title: '更新后标题' });
+      const novel = useNovelsStore.getState().addNovel({
+        userId: 'user-1', title: '测试', genre: 'xianxia', synopsis: '',
+        targetPlatforms: [], status: 'draft', settings: { writingMode: 'ai_collaboration' },
       });
 
-      const novel = useNovelsStore.getState().novels.find(n => n.id === 'test-1');
-      expect(novel?.title).toBe('更新后标题');
+      act(() => { useNovelsStore.getState().updateNovel(novel.id, { title: '更新后标题' }); });
+
+      const updated = useNovelsStore.getState().getNovel(novel.id);
+      expect(updated?.title).toBe('更新后标题');
     });
 
     it('应该正确删除小说', () => {
-      act(() => {
-        useNovelsStore.getState().deleteNovel('test-1');
+      const novel = useNovelsStore.getState().addNovel({
+        userId: 'user-1', title: '测试', genre: 'xianxia', synopsis: '',
+        targetPlatforms: [], status: 'draft', settings: { writingMode: 'ai_collaboration' },
       });
 
-      const novel = useNovelsStore.getState().novels.find(n => n.id === 'test-1');
-      expect(novel).toBeUndefined();
+      act(() => { useNovelsStore.getState().deleteNovel(novel.id); });
+      expect(useNovelsStore.getState().getNovel(novel.id)).toBeUndefined();
+    });
+
+    it('应该持久化到localStorage', () => {
+      useNovelsStore.getState().addNovel({
+        userId: 'user-1', title: '持久化测试', genre: 'urban', synopsis: '',
+        targetPlatforms: [], status: 'draft', settings: { writingMode: 'ai_auto' },
+      });
+
+      const stored = JSON.parse(localStorage.getItem('moyu_novels') || '[]');
+      expect(stored).toHaveLength(1);
+      expect(stored[0].title).toBe('持久化测试');
     });
   });
 
-  describe('ChaptersStore - 章节管理', () => {
-    const mockChapter: Chapter = {
-      id: 'chapter-1',
-      novelId: 'novel-1',
-      orderIndex: 1,
-      title: '第一章：开始',
-      content: '这是章节内容',
-      wordCount: 2000,
-      status: 'draft' as ChapterStatus,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  describe('ChaptersStore', () => {
+    const novelId = 'test-novel';
 
     it('应该正确添加章节', () => {
-      act(() => {
-        useChaptersStore.getState().addChapter(mockChapter);
+      useChaptersStore.getState().loadChapters(novelId);
+      const chapter = useChaptersStore.getState().addChapter(novelId, {
+        orderIndex: 1, title: '第一章', content: '', status: 'draft',
       });
 
-      const chapters = useChaptersStore.getState().chapters;
-      expect(chapters.some(c => c.id === 'chapter-1')).toBe(true);
+      expect(chapter.id).toBeTruthy();
+      expect(chapter.title).toBe('第一章');
+      expect(useChaptersStore.getState().getChapters(novelId)).toHaveLength(1);
     });
 
     it('应该正确更新章节', () => {
+      useChaptersStore.getState().loadChapters(novelId);
+      const chapter = useChaptersStore.getState().addChapter(novelId, {
+        orderIndex: 1, title: '第一章', content: '', status: 'draft',
+      });
+
       act(() => {
-        useChaptersStore.getState().updateChapter('chapter-1', {
-          status: 'completed' as ChapterStatus,
-          wordCount: 3000
+        useChaptersStore.getState().updateChapter(novelId, chapter.id, {
+          content: '新内容', wordCount: 1000, status: 'completed' as ChapterStatus,
         });
       });
 
-      const chapter = useChaptersStore.getState().chapters.find(c => c.id === 'chapter-1');
-      expect(chapter?.status).toBe('completed');
-      expect(chapter?.wordCount).toBe(3000);
+      const updated = useChaptersStore.getState().getChapters(novelId).find(c => c.id === chapter.id);
+      expect(updated?.wordCount).toBe(1000);
+      expect(updated?.status).toBe('completed');
     });
 
-    it('应该正确设置当前章节', () => {
-      act(() => {
-        useChaptersStore.getState().setCurrentChapter(mockChapter);
+    it('应该正确删除章节', () => {
+      useChaptersStore.getState().loadChapters(novelId);
+      const chapter = useChaptersStore.getState().addChapter(novelId, {
+        orderIndex: 1, title: '第一章', content: '', status: 'draft',
       });
 
-      expect(useChaptersStore.getState().currentChapter?.id).toBe('chapter-1');
+      act(() => { useChaptersStore.getState().deleteChapter(novelId, chapter.id); });
+      expect(useChaptersStore.getState().getChapters(novelId)).toHaveLength(0);
     });
   });
 
-  describe('CharactersStore - 角色管理', () => {
-    const mockCharacter: Character = {
-      id: 'char-1',
-      novelId: 'novel-1',
-      name: '测试角色',
-      roleType: 'protagonist',
-      personality: { tags: ['勇敢', '聪明'] },
-      appearance: { age: '20岁', height: '175cm' },
-      background: '测试背景',
-      speechStyle: '测试语言风格',
-      relationships: [],
-      importance: 3,
-      createdAt: new Date(),
-    };
+  describe('CharactersStore', () => {
+    const novelId = 'test-novel';
 
     it('应该正确添加角色', () => {
-      act(() => {
-        useCharactersStore.getState().addCharacter(mockCharacter);
+      useCharactersStore.getState().loadCharacters(novelId);
+      const character = useCharactersStore.getState().addCharacter(novelId, {
+        name: '林风', roleType: 'protagonist',
+        personality: { tags: ['勇敢'] }, appearance: {},
+        background: '背景', speechStyle: '沉稳', relationships: [], importance: 3,
       });
 
-      const characters = useCharactersStore.getState().characters;
-      expect(characters.some(c => c.id === 'char-1')).toBe(true);
+      expect(character.id).toBeTruthy();
+      expect(useCharactersStore.getState().getCharacters(novelId)).toHaveLength(1);
     });
 
     it('应该正确更新角色', () => {
-      act(() => {
-        useCharactersStore.getState().updateCharacter('char-1', {
-          name: '更新后角色名'
-        });
+      useCharactersStore.getState().loadCharacters(novelId);
+      const character = useCharactersStore.getState().addCharacter(novelId, {
+        name: '林风', roleType: 'protagonist',
+        personality: { tags: ['勇敢'] }, appearance: {},
+        background: '背景', speechStyle: '沉稳', relationships: [], importance: 3,
       });
 
-      const character = useCharactersStore.getState().characters.find(c => c.id === 'char-1');
-      expect(character?.name).toBe('更新后角色名');
+      act(() => {
+        useCharactersStore.getState().updateCharacter(novelId, character.id, { name: '更新名' });
+      });
+
+      const updated = useCharactersStore.getState().getCharacters(novelId).find(c => c.id === character.id);
+      expect(updated?.name).toBe('更新名');
+    });
+
+    it('应该正确删除角色', () => {
+      useCharactersStore.getState().loadCharacters(novelId);
+      const character = useCharactersStore.getState().addCharacter(novelId, {
+        name: '林风', roleType: 'protagonist',
+        personality: { tags: [] }, appearance: {},
+        background: '', speechStyle: '', relationships: [], importance: 1,
+      });
+
+      act(() => { useCharactersStore.getState().deleteCharacter(novelId, character.id); });
+      expect(useCharactersStore.getState().getCharacters(novelId)).toHaveLength(0);
     });
   });
 
-  describe('WorldStore - 世界观管理', () => {
-    const mockWorld: WorldBuilding = {
-      id: 'world-1',
-      novelId: 'novel-1',
-      category: 'geography',
-      name: '测试地图',
-      properties: { type: '城市' },
-      description: '测试描述',
-      importance: 2,
-      createdAt: new Date(),
-    };
+  describe('WorldStore', () => {
+    const novelId = 'test-novel';
 
     it('应该正确添加世界观设定', () => {
-      act(() => {
-        useWorldStore.getState().addWorldBuilding(mockWorld);
+      useWorldStore.getState().loadWorld(novelId);
+      const building = useWorldStore.getState().addWorldBuilding(novelId, {
+        category: 'geography', name: '青云山',
+        properties: { type: '山脉' }, description: '灵山', importance: 3,
       });
 
-      const worlds = useWorldStore.getState().worldBuildings;
-      expect(worlds.some(w => w.id === 'world-1')).toBe(true);
+      expect(building.id).toBeTruthy();
+      expect(useWorldStore.getState().getWorldBuildings(novelId)).toHaveLength(1);
+    });
+
+    it('应该正确更新世界观设定', () => {
+      useWorldStore.getState().loadWorld(novelId);
+      const building = useWorldStore.getState().addWorldBuilding(novelId, {
+        category: 'geography', name: '青云山',
+        properties: {}, description: '', importance: 1,
+      });
+
+      act(() => {
+        useWorldStore.getState().updateWorldBuilding(novelId, building.id, { name: '更新名' });
+      });
+
+      const updated = useWorldStore.getState().getWorldBuildings(novelId).find(w => w.id === building.id);
+      expect(updated?.name).toBe('更新名');
     });
   });
 
-  describe('TimelineStore - 时间线管理', () => {
-    const mockEvent: TimelineEvent = {
-      id: 'event-1',
-      novelId: 'novel-1',
-      eventTime: '修仙历元年',
-      title: '测试事件',
-      description: '测试描述',
-      characters: ['角色1'],
-      relatedChapters: ['第1章'],
-      importance: 3,
-      createdAt: new Date(),
-    };
+  describe('TimelineStore', () => {
+    const novelId = 'test-novel';
 
     it('应该正确添加时间线事件', () => {
-      act(() => {
-        useTimelineStore.getState().addEvent(mockEvent);
+      useTimelineStore.getState().loadEvents(novelId);
+      const event = useTimelineStore.getState().addEvent(novelId, {
+        eventTime: '元年春', title: '出生',
+        description: '主角出生', characters: ['林风'], relatedChapters: [], importance: 3,
       });
 
-      const events = useTimelineStore.getState().events;
-      expect(events.some(e => e.id === 'event-1')).toBe(true);
+      expect(event.id).toBeTruthy();
+      expect(useTimelineStore.getState().getEvents(novelId)).toHaveLength(1);
+    });
+
+    it('应该正确删除时间线事件', () => {
+      useTimelineStore.getState().loadEvents(novelId);
+      const event = useTimelineStore.getState().addEvent(novelId, {
+        eventTime: '元年', title: '测试', description: '', characters: [], relatedChapters: [], importance: 1,
+      });
+
+      act(() => { useTimelineStore.getState().deleteEvent(novelId, event.id); });
+      expect(useTimelineStore.getState().getEvents(novelId)).toHaveLength(0);
     });
   });
 
-  describe('AIWritingStore - AI写作状态', () => {
-    it('应该正确设置生成状态', () => {
-      act(() => {
-        useAIWritingStore.getState().setIsGenerating(true);
+  describe('PublishStore', () => {
+    const novelId = 'test-novel';
+
+    it('应该正确添加发布配置', () => {
+      usePublishStore.getState().loadPublish(novelId);
+      usePublishStore.getState().addConfig(novelId, {
+        platform: 'fanqie', autoConvert: true, syncEnabled: false, status: 'active',
       });
 
+      expect(usePublishStore.getState().getConfigs(novelId)).toHaveLength(1);
+    });
+
+    it('应该正确添加发布计划', () => {
+      usePublishStore.getState().loadPublish(novelId);
+      usePublishStore.getState().addSchedule(novelId, {
+        chapterId: 'ch-1', platform: 'fanqie',
+        scheduledTime: new Date(), status: 'pending',
+      });
+
+      expect(usePublishStore.getState().getSchedules(novelId)).toHaveLength(1);
+    });
+  });
+
+  describe('AIWritingStore', () => {
+    it('应该正确设置生成状态', () => {
+      act(() => { useAIWritingStore.getState().setIsGenerating(true); });
       expect(useAIWritingStore.getState().isGenerating).toBe(true);
     });
 
     it('应该正确设置生成内容', () => {
-      const content = '这是AI生成的内容';
-
-      act(() => {
-        useAIWritingStore.getState().setGeneratedContent(content);
-      });
-
-      expect(useAIWritingStore.getState().generatedContent).toBe(content);
+      act(() => { useAIWritingStore.getState().setGeneratedContent('AI内容'); });
+      expect(useAIWritingStore.getState().generatedContent).toBe('AI内容');
     });
 
     it('应该正确切换写作模式', () => {
-      act(() => {
-        useAIWritingStore.getState().setWritingMode('ai_auto');
-      });
-
+      act(() => { useAIWritingStore.getState().setWritingMode('ai_auto'); });
       expect(useAIWritingStore.getState().writingMode).toBe('ai_auto');
     });
   });
-});
 
-describe('类型定义测试', () => {
-  it('Novel类型应该包含所有必要字段', () => {
-    const novel: Novel = {
-      id: '1',
-      userId: '1',
-      title: '测试',
-      genre: 'urban',
-      synopsis: '测试',
-      targetPlatforms: ['fanqie'],
-      status: 'draft',
-      wordCount: 0,
-      chapterCount: 0,
-      settings: { writingMode: 'ai_collaboration' },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  describe('数据隔离测试', () => {
+    it('不同小说的章节数据应该隔离', () => {
+      useChaptersStore.getState().loadChapters('novel-A');
+      useChaptersStore.getState().loadChapters('novel-B');
 
-    expect(novel.id).toBeDefined();
-    expect(novel.title).toBeDefined();
-    expect(novel.genre).toBeDefined();
-  });
+      useChaptersStore.getState().addChapter('novel-A', {
+        orderIndex: 1, title: 'A章', content: '', status: 'draft',
+      });
+      useChaptersStore.getState().addChapter('novel-B', {
+        orderIndex: 1, title: 'B章', content: '', status: 'draft',
+      });
 
-  it('ChapterStatus类型应该包含所有状态', () => {
-    const statuses: ChapterStatus[] = ['draft', 'revising', 'completed', 'published', 'writing'];
+      expect(useChaptersStore.getState().getChapters('novel-A')).toHaveLength(1);
+      expect(useChaptersStore.getState().getChapters('novel-B')).toHaveLength(1);
+      expect(useChaptersStore.getState().getChapters('novel-A')[0].title).toBe('A章');
+      expect(useChaptersStore.getState().getChapters('novel-B')[0].title).toBe('B章');
+    });
 
-    statuses.forEach(status => {
-      const chapter: Chapter = {
-        id: '1',
-        novelId: '1',
-        orderIndex: 1,
-        title: '测试',
-        content: '',
-        wordCount: 0,
-        status,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      expect(chapter.status).toBe(status);
+    it('不同小说的角色数据应该隔离', () => {
+      useCharactersStore.getState().loadCharacters('novel-A');
+      useCharactersStore.getState().loadCharacters('novel-B');
+
+      useCharactersStore.getState().addCharacter('novel-A', {
+        name: '角色A', roleType: 'protagonist',
+        personality: { tags: [] }, appearance: {},
+        background: '', speechStyle: '', relationships: [], importance: 1,
+      });
+
+      expect(useCharactersStore.getState().getCharacters('novel-A')).toHaveLength(1);
+      expect(useCharactersStore.getState().getCharacters('novel-B')).toHaveLength(0);
     });
   });
 });

@@ -2,79 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Filter, BookOpen, Clock, TrendingUp, MoreVertical, Edit, Trash2, Copy } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useNovelsStore } from '../store';
-import type { Novel, NovelGenre } from '../types';
-
-const mockNovels: Novel[] = [
-  {
-    id: '1',
-    userId: '1',
-    title: '修仙：从凡人到飞升',
-    subtitle: '逆天改命，踏上仙途',
-    genre: 'xianxia',
-    synopsis: '一个平凡的少年意外获得上古修仙传承，从此踏上逆天改命的修仙之路。看他如何在这个弱肉强食的修仙世界中，一步步走向巅峰，最终飞升成仙。',
-    targetPlatforms: ['fanqie', 'qimao'],
-    status: 'writing',
-    wordCount: 856000,
-    chapterCount: 156,
-    settings: { writingMode: 'ai_collaboration' },
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date(),
-  },
-  {
-    id: '2',
-    userId: '1',
-    title: '都市兵王',
-    subtitle: '王者归来',
-    genre: 'urban',
-    synopsis: '特种兵王回归都市，面对各路势力的挑衅，他一一粉碎敌人阴谋，保护身边之人，最终站在都市之巅。',
-    targetPlatforms: ['qidian', 'wechat'],
-    status: 'writing',
-    wordCount: 420000,
-    chapterCount: 89,
-    settings: { writingMode: 'ai_auto' },
-    createdAt: new Date('2024-03-20'),
-    updatedAt: new Date(),
-  },
-  {
-    id: '3',
-    userId: '1',
-    title: '末世重生之我有系统',
-    subtitle: '',
-    genre: 'science',
-    synopsis: '重生到末世前一个月，凭借前世记忆和神秘系统，在丧尸横行的世界中建立人类最后堡垒。',
-    targetPlatforms: ['kuaibao'],
-    status: 'draft',
-    wordCount: 0,
-    chapterCount: 0,
-    settings: { writingMode: 'ai_collaboration' },
-    createdAt: new Date('2024-06-01'),
-    updatedAt: new Date(),
-  },
-];
-
-const genreLabels: Record<NovelGenre, string> = {
-  xianxia: '仙侠',
-  youth: '都市青春',
-  urban: '都市',
-  historical: '历史',
-  game: '游戏',
-  science: '科幻',
-  psychological: '心理',
-  horror: '悬疑',
-  martial_arts: '武侠',
-  other: '其他',
-};
+import { useNovelsStore, useAppStore, genreLabels, platformInfo } from '../store';
+import type { Novel, NovelGenre, Platform } from '../types';
 
 export function Novels() {
-  const { novels, setNovels, addNovel } = useNovelsStore();
+  const { novels } = useNovelsStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterGenre, setFilterGenre] = useState<NovelGenre | 'all'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  
-  const displayNovels = novels.length > 0 ? novels : mockNovels;
 
-  const filteredNovels = displayNovels.filter(novel => {
+  const filteredNovels = novels.filter((novel) => {
     const matchesSearch = novel.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           novel.synopsis.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesGenre = filterGenre === 'all' || novel.genre === filterGenre;
@@ -92,7 +29,7 @@ export function Novels() {
           <h1 className="text-3xl font-serif font-bold text-ink-900">我的小说</h1>
           <p className="text-ink-600 mt-1">管理你的创作项目</p>
         </div>
-        <button 
+        <button
           onClick={handleCreateNovel}
           className="px-4 py-2 bg-vermillion-500 text-white rounded-lg hover:bg-vermillion-600 transition-colors flex items-center gap-2"
         >
@@ -131,7 +68,7 @@ export function Novels() {
         {filteredNovels.map((novel, index) => (
           <NovelCard key={novel.id} novel={novel} index={index} />
         ))}
-        
+
         <button
           onClick={handleCreateNovel}
           className="min-h-[280px] border-2 border-dashed border-ink-300 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group"
@@ -152,9 +89,17 @@ export function Novels() {
 
 function NovelCard({ novel, index }: { novel: Novel; index: number }) {
   const [showMenu, setShowMenu] = useState(false);
+  const { deleteNovel } = useNovelsStore();
+
+  const handleDelete = () => {
+    if (window.confirm('确定要删除这部小说吗？此操作不可撤销。')) {
+      deleteNovel(novel.id);
+    }
+    setShowMenu(false);
+  };
 
   return (
-    <div 
+    <div
       className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-ink-200/50 overflow-hidden hover:shadow-lg transition-all group"
       style={{ animationDelay: `${index * 100}ms` }}
     >
@@ -167,7 +112,7 @@ function NovelCard({ novel, index }: { novel: Novel; index: number }) {
         </div>
         <div className="absolute top-3 right-3">
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowMenu(!showMenu)}
               className="p-1.5 rounded-lg bg-white/80 hover:bg-white transition-colors"
             >
@@ -181,7 +126,10 @@ function NovelCard({ novel, index }: { novel: Novel; index: number }) {
                 <button className="w-full px-3 py-2 text-left text-sm text-ink-700 hover:bg-ink-50 flex items-center gap-2">
                   <Copy className="w-4 h-4" /> 复制
                 </button>
-                <button className="w-full px-3 py-2 text-left text-sm text-vermillion-600 hover:bg-vermillion-50 flex items-center gap-2">
+                <button
+                  onClick={handleDelete}
+                  className="w-full px-3 py-2 text-left text-sm text-vermillion-600 hover:bg-vermillion-50 flex items-center gap-2"
+                >
                   <Trash2 className="w-4 h-4" /> 删除
                 </button>
               </div>
@@ -200,7 +148,7 @@ function NovelCard({ novel, index }: { novel: Novel; index: number }) {
 
       <div className="p-4">
         <p className="text-sm text-ink-600 line-clamp-2 mb-4">{novel.synopsis}</p>
-        
+
         <div className="flex items-center gap-4 text-sm text-ink-500 mb-4">
           <div className="flex items-center gap-1.5">
             <BookOpen className="w-4 h-4" />
@@ -222,13 +170,15 @@ function NovelCard({ novel, index }: { novel: Novel; index: number }) {
             novel.status === 'writing' && 'bg-jade-100 text-jade-700',
             novel.status === 'draft' && 'bg-amber-100 text-amber-700',
             novel.status === 'completed' && 'bg-indigo-100 text-indigo-700',
+            novel.status === 'suspended' && 'bg-ink-100 text-ink-700',
           )}>
             {novel.status === 'writing' && '创作中'}
             {novel.status === 'draft' && '草稿'}
             {novel.status === 'completed' && '已完成'}
+            {novel.status === 'suspended' && '已暂停'}
           </span>
-          
-          <Link 
+
+          <Link
             to={`/novels/${novel.id}`}
             className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
           >
@@ -241,21 +191,43 @@ function NovelCard({ novel, index }: { novel: Novel; index: number }) {
 }
 
 function CreateNovelModal({ onClose }: { onClose: () => void }) {
+  const { addNovel } = useNovelsStore();
+  const { user } = useAppStore();
   const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
   const [genre, setGenre] = useState<NovelGenre>('xianxia');
   const [synopsis, setSynopsis] = useState('');
+  const [targetPlatforms, setTargetPlatforms] = useState<Platform[]>([]);
+  const [writingMode, setWritingMode] = useState<'ai_collaboration' | 'ai_auto'>('ai_collaboration');
+
+  const handlePlatformToggle = (platform: Platform) => {
+    setTargetPlatforms((prev) =>
+      prev.includes(platform)
+        ? prev.filter((p) => p !== platform)
+        : [...prev, platform]
+    );
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('创建小说:', { title, genre, synopsis });
+    addNovel({
+      userId: user.id,
+      title,
+      subtitle: subtitle || undefined,
+      genre,
+      synopsis,
+      targetPlatforms,
+      status: 'draft',
+      settings: { writingMode },
+    });
     onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-serif font-bold text-ink-900 mb-6">创建新小说</h2>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-ink-700 mb-1.5">小说标题</label>
@@ -266,6 +238,17 @@ function CreateNovelModal({ onClose }: { onClose: () => void }) {
               placeholder="请输入小说标题"
               className="w-full px-4 py-2.5 rounded-xl border border-ink-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none"
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink-700 mb-1.5">副标题</label>
+            <input
+              type="text"
+              value={subtitle}
+              onChange={(e) => setSubtitle(e.target.value)}
+              placeholder="可选，小说副标题"
+              className="w-full px-4 py-2.5 rounded-xl border border-ink-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none"
             />
           </div>
 
@@ -292,6 +275,39 @@ function CreateNovelModal({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-2.5 rounded-xl border border-ink-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none resize-none"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink-700 mb-1.5">目标平台</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(platformInfo) as Platform[]).map((platform) => (
+                <button
+                  key={platform}
+                  type="button"
+                  onClick={() => handlePlatformToggle(platform)}
+                  className={clsx(
+                    'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                    targetPlatforms.includes(platform)
+                      ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                      : 'bg-white border-ink-200 text-ink-600 hover:border-ink-300'
+                  )}
+                >
+                  {platformInfo[platform].name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink-700 mb-1.5">写作模式</label>
+            <select
+              value={writingMode}
+              onChange={(e) => setWritingMode(e.target.value as 'ai_collaboration' | 'ai_auto')}
+              className="w-full px-4 py-2.5 rounded-xl border border-ink-200 focus:border-indigo-400 outline-none"
+            >
+              <option value="ai_collaboration">AI协作模式</option>
+              <option value="ai_auto">AI自动模式</option>
+            </select>
           </div>
 
           <div className="flex gap-3 pt-4">

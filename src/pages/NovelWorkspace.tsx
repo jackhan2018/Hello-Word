@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, Outlet } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  Settings, 
-  Users, 
-  Globe, 
-  Clock, 
+import {
+  ChevronLeft,
+  Settings,
+  Users,
+  Globe,
+  Clock,
   BookOpen,
   PenTool,
   FileText,
@@ -16,41 +16,43 @@ import {
   Plus
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import type { Novel, Chapter } from '../types';
-
-const mockNovel: Novel = {
-  id: '1',
-  userId: '1',
-  title: '修仙：从凡人到飞升',
-  subtitle: '逆天改命，踏上仙途',
-  genre: 'xianxia',
-  synopsis: '一个平凡的少年意外获得上古修仙传承，从此踏上逆天改命的修仙之路。看他如何在这个弱肉强食的修仙世界中，一步步走向巅峰，最终飞升成仙。',
-  targetPlatforms: ['fanqie', 'qimao'],
-  status: 'writing',
-  wordCount: 856000,
-  chapterCount: 156,
-  settings: { writingMode: 'ai_collaboration' },
-  createdAt: new Date('2024-01-15'),
-  updatedAt: new Date(),
-};
-
-const mockChapters: Chapter[] = Array.from({ length: 10 }, (_, i) => ({
-  id: String(i + 1),
-  novelId: '1',
-  orderIndex: 150 + i,
-  title: `第${150 + i + 1}章：${['宗门大比', '初露锋芒', '强敌环伺', '绝地反击', '突破境界', '新的征程', '意外收获', '危机四伏', '力挽狂澜', '决战时刻'][i]}`,
-  content: '',
-  wordCount: Math.floor(Math.random() * 2000) + 4000,
-  status: i < 9 ? 'published' : 'completed' as const,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-}));
-
-const recentChapters = mockChapters.slice(-5);
+import { useNovelsStore, useChaptersStore, genreLabels, statusLabels } from '../store';
 
 export function NovelWorkspace() {
   const { id } = useParams();
-  const [novel] = useState<Novel>(mockNovel);
+  const getNovel = useNovelsStore((s) => s.getNovel);
+  const loadChapters = useChaptersStore((s) => s.loadChapters);
+  const getChapters = useChaptersStore((s) => s.getChapters);
+  const addChapter = useChaptersStore((s) => s.addChapter);
+
+  const novel = id ? getNovel(id) : undefined;
+  const chapters = id ? getChapters(id) : [];
+  const recentChapters = chapters.slice(-5);
+
+  const [showNewChapter, setShowNewChapter] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+
+  useEffect(() => {
+    if (id) {
+      loadChapters(id);
+    }
+  }, [id, loadChapters]);
+
+  if (!novel) {
+    return (
+      <div className="max-w-7xl mx-auto animate-fade-in flex flex-col items-center justify-center py-32">
+        <BookOpen className="w-16 h-16 text-ink-300 mb-4" />
+        <h2 className="text-2xl font-serif font-bold text-ink-900 mb-2">小说不存在</h2>
+        <p className="text-ink-500 mb-6">找不到该小说，可能已被删除或链接无效</p>
+        <Link
+          to="/novels"
+          className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
+        >
+          返回小说列表
+        </Link>
+      </div>
+    );
+  }
 
   const menuItems = [
     { icon: FileText, label: '章节管理', path: `/novels/${id}`, desc: '查看和编辑章节' },
@@ -61,17 +63,29 @@ export function NovelWorkspace() {
     { icon: Settings, label: '设置', path: `/novels/${id}/settings`, desc: '项目设置' },
   ];
 
+  const handleAddChapter = () => {
+    if (!id || !newTitle.trim()) return;
+    addChapter(id, {
+      orderIndex: chapters.length + 1,
+      title: newTitle.trim(),
+      content: '',
+      status: 'writing',
+    });
+    setNewTitle('');
+    setShowNewChapter(false);
+  };
+
   return (
     <div className="max-w-7xl mx-auto animate-fade-in">
       <header className="mb-6">
-        <Link 
-          to="/novels" 
+        <Link
+          to="/novels"
           className="inline-flex items-center gap-2 text-ink-600 hover:text-indigo-600 transition-colors mb-4"
         >
           <ChevronLeft className="w-4 h-4" />
           返回小说列表
         </Link>
-        
+
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-4">
             <div className="w-16 h-20 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-vermillion-500 flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg">
@@ -84,13 +98,16 @@ export function NovelWorkspace() {
               )}
               <div className="flex items-center gap-3 mt-2">
                 <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded">
-                  {novel.genre === 'xianxia' ? '仙侠' : novel.genre}
+                  {genreLabels[novel.genre] || novel.genre}
                 </span>
                 <span className={clsx(
                   'px-2 py-0.5 text-xs rounded',
                   novel.status === 'writing' && 'bg-jade-100 text-jade-700',
+                  novel.status === 'completed' && 'bg-indigo-100 text-indigo-700',
+                  novel.status === 'draft' && 'bg-ink-100 text-ink-600',
+                  novel.status === 'suspended' && 'bg-amber-100 text-amber-700',
                 )}>
-                  创作中
+                  {statusLabels[novel.status]}
                 </span>
                 <span className="text-sm text-ink-400">
                   {novel.updatedAt.toLocaleDateString('zh-CN')}
@@ -98,7 +115,7 @@ export function NovelWorkspace() {
               </div>
             </div>
           </div>
-          
+
           <button className="p-2 hover:bg-ink-100 rounded-lg">
             <MoreVertical className="w-5 h-5 text-ink-600" />
           </button>
@@ -106,33 +123,29 @@ export function NovelWorkspace() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard 
+        <StatCard
           icon={BookOpen}
           label="总章节"
           value={novel.chapterCount}
           color="indigo"
-          trend="+2 本周"
         />
-        <StatCard 
+        <StatCard
           icon={FileText}
           label="总字数"
-          value={`${(novel.wordCount / 10000).toFixed(1)}万`}
+          value={novel.wordCount >= 10000 ? `${(novel.wordCount / 10000).toFixed(1)}万` : novel.wordCount}
           color="jade"
-          trend="+3.2万 本周"
         />
-        <StatCard 
+        <StatCard
           icon={TrendingUp}
-          label="日均更新"
-          value="3200字"
+          label="创作状态"
+          value={statusLabels[novel.status]}
           color="amber"
-          trend="↑ 稳定"
         />
-        <StatCard 
+        <StatCard
           icon={Sparkles}
           label="AI协作"
-          value="开启"
+          value={novel.settings.writingMode === 'ai_collaboration' ? '开启' : '自动'}
           color="vermillion"
-          trend="效率提升 40%"
         />
       </div>
 
@@ -163,29 +176,36 @@ export function NovelWorkspace() {
               查看全部 →
             </Link>
           </div>
-          <div className="space-y-2">
-            {recentChapters.map((chapter) => (
-              <Link
-                key={chapter.id}
-                to={`/novels/${id}/chapter/${chapter.id}`}
-                className="block p-3 rounded-xl hover:bg-ink-50 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-ink-900 truncate">{chapter.title}</span>
-                  <span className={clsx(
-                    'px-2 py-0.5 text-xs rounded',
-                    chapter.status === 'published' && 'bg-jade-100 text-jade-700',
-                    chapter.status === 'completed' && 'bg-indigo-100 text-indigo-700',
-                  )}>
-                    {chapter.status === 'published' ? '已发布' : '已完成'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-1 text-xs text-ink-400">
-                  <span>{chapter.wordCount}字</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+          {recentChapters.length > 0 ? (
+            <div className="space-y-2">
+              {recentChapters.map((chapter) => (
+                <Link
+                  key={chapter.id}
+                  to={`/novels/${id}/chapter/${chapter.id}`}
+                  className="block p-3 rounded-xl hover:bg-ink-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-ink-900 truncate">{chapter.title}</span>
+                    <span className={clsx(
+                      'px-2 py-0.5 text-xs rounded',
+                      chapter.status === 'published' && 'bg-jade-100 text-jade-700',
+                      chapter.status === 'completed' && 'bg-indigo-100 text-indigo-700',
+                      chapter.status === 'writing' && 'bg-amber-100 text-amber-700',
+                      chapter.status === 'draft' && 'bg-ink-100 text-ink-600',
+                      chapter.status === 'revising' && 'bg-amber-100 text-amber-700',
+                    )}>
+                      {chapter.status === 'published' ? '已发布' : chapter.status === 'completed' ? '已完成' : chapter.status === 'writing' ? '写作中' : chapter.status === 'draft' ? '草稿' : '修订中'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-ink-400">
+                    <span>{chapter.wordCount}字</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-ink-400 py-4 text-center">暂无章节</p>
+          )}
         </div>
       </div>
 
@@ -196,36 +216,73 @@ export function NovelWorkspace() {
             <p className="text-indigo-100 text-sm">继续上一章的创作，或开始新章节</p>
           </div>
           <div className="flex gap-3">
-            <Link 
-              to={`/novels/${id}/chapter/${recentChapters[recentChapters.length - 1]?.id}`}
-              className="px-6 py-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-50 transition-colors font-medium flex items-center gap-2"
+            {recentChapters.length > 0 && (
+              <Link
+                to={`/novels/${id}/chapter/${recentChapters[recentChapters.length - 1].id}`}
+                className="px-6 py-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-50 transition-colors font-medium flex items-center gap-2"
+              >
+                <PenTool className="w-4 h-4" />
+                继续写作
+              </Link>
+            )}
+            <button
+              onClick={() => setShowNewChapter(true)}
+              className="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-colors font-medium flex items-center gap-2"
             >
-              <PenTool className="w-4 h-4" />
-              继续写作
-            </Link>
-            <button className="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-colors font-medium flex items-center gap-2">
               <Plus className="w-4 h-4" />
               新建章节
             </button>
           </div>
         </div>
       </div>
+
+      {showNewChapter && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-serif font-bold text-ink-900 mb-4">新建章节</h3>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="章节标题"
+              className="w-full px-4 py-2 border border-ink-200 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none mb-4"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddChapter(); }}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setShowNewChapter(false); setNewTitle(''); }}
+                className="px-4 py-2 text-sm text-ink-600 hover:bg-ink-50 rounded-lg"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddChapter}
+                disabled={!newTitle.trim()}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                创建
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Outlet />
     </div>
   );
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  color, 
-  trend 
-}: { 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
   icon: React.ElementType;
   label: string;
   value: string | number;
   color: string;
-  trend: string;
 }) {
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-ink-200/50 p-4">
@@ -238,12 +295,6 @@ function StatCard({
           color === 'vermillion' && 'bg-vermillion-100 text-vermillion-600',
         )}>
           <Icon className="w-5 h-5" />
-        </span>
-        <span className={clsx(
-          'text-xs px-2 py-0.5 rounded-full',
-          trend.includes('↑') ? 'bg-jade-100 text-jade-700' : 'bg-ink-100 text-ink-600'
-        )}>
-          {trend}
         </span>
       </div>
       <p className="text-2xl font-bold text-ink-900">{value}</p>

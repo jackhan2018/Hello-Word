@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Save, 
-  Sparkles, 
-  List, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Sparkles,
+  List,
   Clock,
   Users,
   Globe,
@@ -20,120 +20,61 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useChaptersStore, useAIWritingStore } from '../store';
-import type { Chapter, Character, WorldBuilding, ChapterStatus } from '../types';
-
-const mockChapters: Chapter[] = Array.from({ length: 156 }, (_, i): Chapter => ({
-  id: String(i + 1),
-  novelId: '1',
-  orderIndex: i + 1,
-  title: `第${i + 1}章：${['初入宗门', '灵根觉醒', '宗门大比', '历练之旅', '突破瓶颈'][i % 5]}`,
-  content: '',
-  wordCount: Math.floor(Math.random() * 3000) + 4000,
-  status: (i < 150 ? 'published' : i < 155 ? 'completed' : 'writing') as ChapterStatus,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-}));
-
-const mockCharacters: Character[] = [
-  {
-    id: '1',
-    novelId: '1',
-    name: '林风',
-    roleType: 'protagonist',
-    personality: { tags: ['坚韧', '善良', '执着'], fears: ['失去亲人'], desires: ['修仙成神'] },
-    appearance: { age: '18岁', height: '175cm', features: ['剑眉星目'] },
-    background: '青石镇普通少年，意外获得上古传承',
-    speechStyle: '沉稳有力，关键时刻果断',
-    relationships: [],
-    importance: 3,
-    createdAt: new Date(),
-  },
-  {
-    id: '2',
-    novelId: '1',
-    name: '苏婉儿',
-    roleType: 'supporting',
-    personality: { tags: ['温柔', '聪慧', '独立'] },
-    appearance: { age: '17岁', height: '165cm' },
-    background: '青云宗掌门之女',
-    speechStyle: '柔和细腻',
-    relationships: [],
-    importance: 2,
-    createdAt: new Date(),
-  },
-];
-
-const mockWorldSettings: WorldBuilding[] = [
-  {
-    id: '1',
-    novelId: '1',
-    category: 'geography',
-    name: '青云宗',
-    properties: { level: '一流宗门', location: '青云山脉' },
-    description: '修仙界顶级宗门之一',
-    importance: 3,
-    createdAt: new Date(),
-  },
-  {
-    id: '2',
-    novelId: '1',
-    category: 'magic_system',
-    name: '灵气修炼体系',
-    properties: { levels: ['练气', '筑基', '金丹', '元婴', '化神', '渡劫', '大乘', '真仙'] },
-    description: '主流修炼体系',
-    importance: 3,
-    createdAt: new Date(),
-  },
-];
+import { useChaptersStore, useCharactersStore, useWorldStore, useAIWritingStore } from '../store';
 
 export function WritingEditor() {
-  const { chapterId } = useParams();
-  const { chapters, currentChapter, setCurrentChapter, updateChapter } = useChaptersStore();
+  const { id: novelId, chapterId } = useParams();
+  const loadChapters = useChaptersStore((s) => s.loadChapters);
+  const getChapters = useChaptersStore((s) => s.getChapters);
+  const addChapter = useChaptersStore((s) => s.addChapter);
+  const updateChapter = useChaptersStore((s) => s.updateChapter);
+  const loadCharacters = useCharactersStore((s) => s.loadCharacters);
+  const getCharacters = useCharactersStore((s) => s.getCharacters);
+  const loadWorld = useWorldStore((s) => s.loadWorld);
+  const getWorldBuildings = useWorldStore((s) => s.getWorldBuildings);
   const { isGenerating, setIsGenerating, generatedContent, setGeneratedContent } = useAIWritingStore();
-  
+
   const [showChapterList, setShowChapterList] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(true);
   const [content, setContent] = useState('');
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [currentChapterId, setCurrentChapterId] = useState<string | null>(null);
+  const [showNewChapter, setShowNewChapter] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const displayChapters = chapters.length > 0 ? chapters : mockChapters;
-  const current = currentChapter || displayChapters.find(c => c.id === chapterId) || displayChapters[displayChapters.length - 1];
+  useEffect(() => {
+    if (novelId) {
+      loadChapters(novelId);
+      loadCharacters(novelId);
+      loadWorld(novelId);
+    }
+  }, [novelId, loadChapters, loadCharacters, loadWorld]);
+
+  const chapters = novelId ? getChapters(novelId) : [];
+  const characters = novelId ? getCharacters(novelId) : [];
+  const worldSettings = novelId ? getWorldBuildings(novelId) : [];
+
+  const current = chapters.find(c => c.id === (currentChapterId || chapterId)) || chapters[0] || null;
+
+  useEffect(() => {
+    if (current && current.id !== currentChapterId) {
+      setCurrentChapterId(current.id);
+    }
+  }, [current]);
 
   useEffect(() => {
     if (current) {
-      setCurrentChapter(current);
-      setContent(current.content || generateSampleContent(current.orderIndex));
+      setContent(current.content || '');
     }
   }, [current?.id]);
 
-  const generateSampleContent = (chapterNum: number) => {
-    return `第${chapterNum}章：宗门大比
-
-清晨的阳光透过云层，洒落在青云宗的演武场上。林风早早地来到了这里，今日便是宗门大比的日子。
-
-"林风师兄！"身后传来清脆的声音。苏婉儿穿着一身淡蓝色的衣裙，快步走了过来。
-
-林风转过身，看着眼前的少女，眼中闪过一丝温柔："婉儿，你怎么来了？"
-
-"我来给师兄加油啊！"苏婉儿眨了眨眼睛，"师兄一定要赢哦！"
-
-林风微微一笑："放心，我不会让你失望的。"
-
-此时，周围已经聚集了大量的弟子。长老们坐在高台上，神情严肃。空气中弥漫着紧张的气氛。
-
-"各位弟子，"掌门的声音响彻全场，"宗门大比即将开始！"
-
-林风深吸一口气，眼神变得坚定起来。他知道，这是证明自己的最好机会。`;
-  };
-
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
-    if (current) {
-      updateChapter(current.id, { 
+    if (current && novelId) {
+      updateChapter(novelId, current.id, {
         content: newContent,
-        wordCount: newContent.length 
+        wordCount: newContent.length,
       });
     }
   };
@@ -141,9 +82,9 @@ export function WritingEditor() {
   const handleAISuggest = async () => {
     setIsGenerating(true);
     setShowAISuggestions(true);
-    
+
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     setGeneratedContent(`就在这时，一道凌厉的剑气从远处袭来！
 
 "小心！"林风瞳孔一缩，身形暴退，同时抽出腰间的长剑。
@@ -167,7 +108,7 @@ export function WritingEditor() {
 "受死吧！"林风低喝一声，手中长剑爆发出耀眼的光芒。
 
 黑袍男子脸色大变，想要躲避却已经来不及了...`);
-    
+
     setIsGenerating(false);
   };
 
@@ -179,6 +120,70 @@ export function WritingEditor() {
       setGeneratedContent('');
     }
   };
+
+  const handleAddChapter = () => {
+    if (!novelId || !newTitle.trim()) return;
+    const chapter = addChapter(novelId, {
+      orderIndex: chapters.length + 1,
+      title: newTitle.trim(),
+      content: '',
+      status: 'writing',
+    });
+    setCurrentChapterId(chapter.id);
+    setNewTitle('');
+    setShowNewChapter(false);
+  };
+
+  if (chapters.length === 0) {
+    return (
+      <div className="h-[calc(100vh-3rem)] flex items-center justify-center bg-ink-50/50">
+        <div className="text-center">
+          <FileText className="w-16 h-16 text-ink-300 mx-auto mb-4" />
+          <h2 className="text-xl font-serif font-bold text-ink-900 mb-2">暂无章节</h2>
+          <p className="text-ink-500 mb-6">请先创建一个章节开始写作</p>
+          <button
+            onClick={() => setShowNewChapter(true)}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2 mx-auto"
+          >
+            <Plus className="w-4 h-4" />
+            新建章节
+          </button>
+        </div>
+
+        {showNewChapter && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h3 className="text-lg font-serif font-bold text-ink-900 mb-4">新建章节</h3>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="章节标题"
+                className="w-full px-4 py-2 border border-ink-200 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none mb-4"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddChapter(); }}
+              />
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => { setShowNewChapter(false); setNewTitle(''); }}
+                  className="px-4 py-2 text-sm text-ink-600 hover:bg-ink-50 rounded-lg"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleAddChapter}
+                  disabled={!newTitle.trim()}
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  创建
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-3rem)] flex">
@@ -194,16 +199,16 @@ export function WritingEditor() {
               />
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-2">
-            {displayChapters.slice(0, 50).map((chapter) => (
+            {chapters.map((chapter) => (
               <button
                 key={chapter.id}
-                onClick={() => setCurrentChapter(chapter)}
+                onClick={() => setCurrentChapterId(chapter.id)}
                 className={clsx(
                   'w-full p-3 text-left rounded-lg mb-1 transition-all',
-                  current?.id === chapter.id 
-                    ? 'bg-indigo-100 text-indigo-900' 
+                  current?.id === chapter.id
+                    ? 'bg-indigo-100 text-indigo-900'
                     : 'hover:bg-ink-50 text-ink-700'
                 )}
               >
@@ -215,18 +220,25 @@ export function WritingEditor() {
                     chapter.status === 'published' && 'bg-jade-100 text-jade-700',
                     chapter.status === 'completed' && 'bg-indigo-100 text-indigo-700',
                     chapter.status === 'writing' && 'bg-amber-100 text-amber-700',
+                    chapter.status === 'draft' && 'bg-ink-100 text-ink-600',
+                    chapter.status === 'revising' && 'bg-amber-100 text-amber-700',
                   )}>
                     {chapter.status === 'published' && '已发布'}
                     {chapter.status === 'completed' && '待发'}
                     {chapter.status === 'writing' && '写作中'}
+                    {chapter.status === 'draft' && '草稿'}
+                    {chapter.status === 'revising' && '修订中'}
                   </span>
                 </div>
               </button>
             ))}
           </div>
-          
+
           <div className="p-3 border-t border-ink-200">
-            <button className="w-full py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center justify-center gap-2">
+            <button
+              onClick={() => setShowNewChapter(true)}
+              className="w-full py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg flex items-center justify-center gap-2"
+            >
               <Plus className="w-4 h-4" />
               新建章节
             </button>
@@ -237,7 +249,7 @@ export function WritingEditor() {
       <div className="flex-1 flex flex-col bg-ink-50/50">
         <header className="h-14 bg-white border-b border-ink-200 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => setShowChapterList(!showChapterList)}
               className={clsx(
                 'p-2 rounded-lg transition-colors',
@@ -256,7 +268,7 @@ export function WritingEditor() {
               {content.length} 字
             </span>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <button className="px-3 py-1.5 text-sm text-ink-600 hover:bg-ink-100 rounded-lg flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
@@ -266,14 +278,14 @@ export function WritingEditor() {
               <Save className="w-4 h-4" />
               保存
             </button>
-            <button 
+            <button
               onClick={handleAISuggest}
               className="px-3 py-1.5 text-sm bg-vermillion-500 text-white rounded-lg hover:bg-vermillion-600 flex items-center gap-1.5"
             >
               <Sparkles className="w-4 h-4" />
               AI续写
             </button>
-            <button 
+            <button
               onClick={() => setShowAIPanel(!showAIPanel)}
               className={clsx(
                 'p-2 rounded-lg transition-colors',
@@ -295,7 +307,7 @@ export function WritingEditor() {
                   </button>
                 ))}
               </div>
-              
+
               <div
                 ref={editorRef}
                 contentEditable
@@ -316,53 +328,61 @@ export function WritingEditor() {
                 <h3 className="font-medium text-ink-900">AI写作助手</h3>
                 <p className="text-xs text-ink-500 mt-1">上下文已同步：世界观、人物、记忆</p>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100">
                   <div className="flex items-center gap-2 mb-2">
                     <Users className="w-4 h-4 text-indigo-600" />
                     <span className="text-sm font-medium text-indigo-900">当前场景人物</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {mockCharacters.slice(0, 3).map(char => (
-                      <span key={char.id} className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded">
-                        {char.name}
-                      </span>
-                    ))}
-                  </div>
+                  {characters.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {characters.slice(0, 5).map(char => (
+                        <span key={char.id} className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded">
+                          {char.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink-400">暂无角色数据</p>
+                  )}
                 </div>
-                
+
                 <div className="p-3 rounded-xl bg-jade-50 border border-jade-100">
                   <div className="flex items-center gap-2 mb-2">
                     <Globe className="w-4 h-4 text-jade-600" />
                     <span className="text-sm font-medium text-jade-900">当前世界观</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {mockWorldSettings.slice(0, 2).map(setting => (
-                      <span key={setting.id} className="px-2 py-0.5 text-xs bg-jade-100 text-jade-700 rounded">
-                        {setting.name}
-                      </span>
-                    ))}
-                  </div>
+                  {worldSettings.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {worldSettings.slice(0, 4).map(setting => (
+                        <span key={setting.id} className="px-2 py-0.5 text-xs bg-jade-100 text-jade-700 rounded">
+                          {setting.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink-400">暂无世界观数据</p>
+                  )}
                 </div>
-                
+
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm font-medium text-amber-900">最近剧情</span>
+                    <span className="text-sm font-medium text-amber-900">当前章节</span>
                   </div>
                   <p className="text-xs text-amber-700">
-                    林风参加宗门大比，遭遇神秘黑袍人袭击...
+                    {current ? `${current.title} · ${current.wordCount}字` : '未选择章节'}
                   </p>
                 </div>
-                
+
                 {showAISuggestions && (
                   <div className="p-4 rounded-xl bg-gradient-to-br from-vermillion-50 to-amber-50 border border-vermillion-100">
                     <div className="flex items-center gap-2 mb-3">
                       <Sparkles className="w-4 h-4 text-vermillion-600" />
                       <span className="text-sm font-medium text-vermillion-900">AI续写建议</span>
                     </div>
-                    
+
                     {isGenerating ? (
                       <div className="space-y-2">
                         <div className="h-3 bg-ink-200 rounded animate-pulse" />
@@ -375,13 +395,13 @@ export function WritingEditor() {
                           {generatedContent}
                         </p>
                         <div className="flex gap-2 mt-4">
-                          <button 
+                          <button
                             onClick={insertAIGeneratedContent}
                             className="flex-1 py-2 text-sm bg-vermillion-500 text-white rounded-lg hover:bg-vermillion-600"
                           >
                             采纳
                           </button>
-                          <button 
+                          <button
                             onClick={() => setShowAISuggestions(false)}
                             className="flex-1 py-2 text-sm border border-ink-200 text-ink-600 rounded-lg hover:bg-ink-50"
                           >
@@ -393,9 +413,9 @@ export function WritingEditor() {
                   </div>
                 )}
               </div>
-              
+
               <div className="p-4 border-t border-ink-200">
-                <button 
+                <button
                   onClick={handleAISuggest}
                   className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
                 >
@@ -406,6 +426,38 @@ export function WritingEditor() {
           )}
         </div>
       </div>
+
+      {showNewChapter && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-serif font-bold text-ink-900 mb-4">新建章节</h3>
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="章节标题"
+              className="w-full px-4 py-2 border border-ink-200 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none mb-4"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddChapter(); }}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setShowNewChapter(false); setNewTitle(''); }}
+                className="px-4 py-2 text-sm text-ink-600 hover:bg-ink-50 rounded-lg"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleAddChapter}
+                disabled={!newTitle.trim()}
+                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                创建
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
